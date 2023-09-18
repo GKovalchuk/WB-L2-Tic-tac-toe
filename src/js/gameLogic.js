@@ -1,10 +1,14 @@
+import { setHistoryText, setWinsText } from "./setTexts.js";
+
 // Создаем массив для квадратов поля.
-const squares = [];
+let squares = [];
 
 // Создаем canvas.
 const canvas = document.getElementById("canvas");
 const context = canvas.getContext("2d");
 // Подготавливаем переменные.
+// Длина стороны поля.
+let sideOfField;
 // Длина стороны клетки.
 let side;
 // Текущий ход.
@@ -24,39 +28,79 @@ const winnerCombinations = [
 	[0, 4, 8],
 	[2, 4, 6],
 ];
+let mouseX;
+let mouseY;
+// Счетчики побед.
+let wins = {
+	xWins: 0,
+	yWins: 0,
+	draws: 0,
+};
+
 // Раскрашиваем.
 context.fillStyle = "white";
 
+const setSideOfField = () => {
+	sideOfField = canvas.clientWidth;
+	side = sideOfField / 3;
+};
+
 // Функция для создания квадрата.
-function createSquare({ x, y, sign }) {
-	side = canvas.offsetWidth / 3;
+function createSquare({ x, y, sign, isCursorHere = false }) {
+	// Определяем x и y верхенго левого угла квадрата.
+	const xSide = x * side;
+	const ySide = y * side;
+
+	// Задаем длину линии знака.
+	const lineSize = Math.floor(side / 4);
 	context.lineWidth = 3;
 	// Рисуем квадрат.
 	context.beginPath();
 	context.strokeStyle = "black";
-	context.strokeRect(x, y, side, side);
+	context.strokeRect(xSide, ySide, side, side);
 	context.stroke();
+
+	// Рисуем крестик.
+	const drawX = (color) => {
+		context.beginPath();
+		context.strokeStyle = color;
+		context.moveTo(xSide + lineSize, ySide + lineSize);
+		context.lineTo(xSide + side - lineSize, ySide + side - lineSize);
+		context.moveTo(xSide + side - lineSize, ySide + lineSize);
+		context.lineTo(xSide + lineSize, ySide + side - lineSize);
+		context.stroke();
+	};
+
+	// Рисуем нолик.
+	const drawO = (color) => {
+		context.beginPath();
+		context.strokeStyle = color;
+		context.arc(xSide + side / 2, ySide + side / 2, lineSize * 1.05, 0, 2 * Math.PI);
+		context.stroke();
+	};
+
+	// Отрисовываем указание хода.
+	if (isCursorHere && !sign) {
+		if (signs[turn] === "X") {
+			// Рисуем крестик.
+			drawX("#f87c5633");
+		} else {
+			// Рисуем нолик.
+			drawO("#3CAE7433");
+		}
+	}
 
 	// Отрисовываем знак.
 	if (sign) {
-		// Задаем длину линии.
-		const lineSize = Math.floor(side / 4);
 		if (sign === "X") {
 			// Рисуем крестик.
-			context.beginPath();
-			context.strokeStyle = "#f87c56";
-			context.moveTo(x + lineSize, y + lineSize);
-			context.lineTo(x + side - lineSize, y + side - lineSize);
-			context.moveTo(x + side - lineSize, y + lineSize);
-			context.lineTo(x + lineSize, y + side - lineSize);
-			context.stroke();
+			drawX("#f87c56");
 		} else {
 			// Рисуем нолик.
-			context.beginPath();
-			context.strokeStyle = "#3CAE74";
-			context.arc(x + side / 2, y + side / 2, lineSize * 1.05, 0, 2 * Math.PI);
-			context.stroke();
+			drawO("#3CAE74");
 		}
+		const strSquares = JSON.stringify(squares);
+		localStorage.setItem("ticTacToeProgress", strSquares);
 	}
 }
 
@@ -64,11 +108,15 @@ export const reset = () => {
 	// Очищаем канвас.
 	context.clearRect(0, 0, canvas.width, canvas.height);
 	// Обнуляем данные о нарисованных знаках и перерисовываем поле.
-	squares.forEach((square) => (square.sign = null));
+	squares.forEach((square) => {
+		square.sign = null;
+		square.isCursorHere = false;
+	});
 	squares.forEach((square) => createSquare(square));
 	// Обнуляем счетчик очередности и флаг конца игры.
 	turn = 0;
 	gameOver = false;
+	localStorage.setItem("ticTacToeProgress", false);
 };
 
 // Проверяем наличие победителя.
@@ -77,17 +125,30 @@ function checkForWinner() {
 	const drawWinner = (sign = "Nobody") => {
 		// Накладываем белый фильтр.
 		context.fillStyle = "rgba(255, 255, 255, 0.85)";
-		context.fillRect(0, 0, side * 3, side * 3);
+		context.fillRect(0, 0, canvas.width, canvas.height);
 
 		// Задаем параметры текста.
 		context.font = `${side / 2.5}px Arial`;
 		context.textAlign = "center";
 
 		// Рисуем текст - объявляем победителя.
-		if (sign === "X") context.fillStyle = "#f87c56";
-		if (sign === "O") context.fillStyle = "#3CAE74";
-		else context.fillStyle = "#000000";
+		if (sign === "X") {
+			context.fillStyle = "#f87c56";
+			wins.xWins += 1;
+		} else if (sign === "O") {
+			context.fillStyle = "#3CAE74";
+			wins.yWins += 1;
+		} else if (sign === "Nobody") {
+			context.fillStyle = "#000000";
+			wins.draws += 1;
+		}
 		context.fillText(sign + "  wins!", (side * 3) / 2, (side * 3) / 2);
+
+		// Записываем данные в localStorage и обновляем тексты.
+		localStorage.setItem("ticTacToeProgress", false);
+		localStorage.setItem("ticTacToeWins", `{"xWins":${wins.xWins},"yWins":${wins.yWins},"draws":${wins.draws}}`);
+		setWinsText(wins);
+		setHistoryText(false);
 	};
 
 	// Проходим по массиву победных комбинаций.
@@ -102,27 +163,6 @@ function checkForWinner() {
 			if (s1.sign == s2.sign && s1.sign == s3.sign) {
 				// Ставис флаг конца игры в true.
 				gameOver = true;
-
-				// Рисуем линию, перечеркивающую комбинацию.
-				let xFrom, yFrom, xTo, yTo;
-				xFrom = yFrom = xTo = yTo = side / 2;
-				if (i >= 0 && i <= 2) {
-					yFrom = side / 3;
-					yTo = side / 1.5;
-				} else if (i >= 3 && i <= 5) {
-					xFrom = side / 3;
-					xTo = side / 1.5;
-				} else {
-					yFrom = side / 2.2;
-					yTo = side / 1.8;
-				}
-				context.fillStyle = "black";
-				context.beginPath();
-				context.strokeStyle = "black";
-				context.moveTo(s1.x + xFrom, s1.y + yFrom);
-				context.lineTo(s3.x + xTo, s3.y + yTo);
-				context.stroke();
-
 				// Рисуем текст.
 				drawWinner(s1.sign);
 			}
@@ -151,7 +191,9 @@ function click(e) {
 	// Находим квадрат, к которому принадлежат координаты клика.
 	for (let square of squares) {
 		if (square.sign != null) continue;
-		if (x >= square.x && x <= square.x + side && y >= square.y && y <= square.y + side) {
+		let xSide = square.x * side;
+		let ySide = square.y * side;
+		if (x >= xSide && x <= xSide + side && y >= ySide && y <= ySide + side) {
 			// Определяем и задаем знак. Сменяем ход.
 			square.sign = signs[turn];
 			turn = (turn + 1) % 2;
@@ -164,23 +206,46 @@ function click(e) {
 	checkForWinner();
 }
 
-export function createTicTacToe() {
+// Сброс счетчика побед.
+export const resetWins = () => {
+	wins = {
+		xWins: 0,
+		yWins: 0,
+		draws: 0,
+	};
+};
+
+export function createTicTacToe(historyProgress = false, historyWins) {
 	// Задаем переменные.
 	turn = 0;
 	gameOver = false;
-
 	// Задаем размеры canvas.
-	canvas.width = canvas.height = canvas.clientWidth;
-	side = canvas.width / 3;
+	setSideOfField();
 
 	// Очищаем canvas.
 	context.clearRect(0, 0, canvas.width, canvas.height);
 
-	// Задаем параметры квадратам. Помещаем полученные квадраты в массив.
-	for (let x = 0; x < 3; x += 1) {
-		for (let y = 0; y < 3; y += 1) {
-			squares.push({ x: x * side, y: y * side, sign: null });
+	if (historyWins) {
+		wins = historyWins;
+	}
+
+	if (!historyProgress) {
+		// Задаем параметры квадратам. Помещаем полученные квадраты в массив.
+		for (let x = 0; x < 3; x += 1) {
+			for (let y = 0; y < 3; y += 1) {
+				squares.push({ x, y, sign: null });
+			}
 		}
+	} else {
+		squares = historyProgress;
+		setHistoryText(true);
+		squares.forEach((square) => {
+			if (square.sign != null) {
+				turn += 1;
+			}
+		});
+
+		turn = turn % 2;
 	}
 
 	// Рисуем квадраты на холсте.
@@ -191,3 +256,45 @@ export function createTicTacToe() {
 		click(e);
 	});
 }
+
+/*
+	Функция, отслеживающая положение мыши на canvas.
+	Она же устанавливает подсказку - чья очередь ходить.
+	*/
+canvas.addEventListener("mousemove", (event) => {
+	// Не отслеживаем, пока на экране заставка победы.
+	if (gameOver) return;
+	// Получаем размеры canvas.
+	const sizes = canvas.getBoundingClientRect();
+	const x = event.clientX - sizes.left;
+	const y = event.clientY - sizes.top;
+
+	// Очищаем canvas.
+	context.clearRect(0, 0, canvas.width, canvas.height);
+
+	// Получаем в каком квадрате находится курсор.
+	const row = Math.floor(y / side);
+	const col = Math.floor(x / side) * 3;
+	const curSqr = row + col;
+
+	// Отрисовываем canvas с полупрозрачным указателем хода.
+	squares.forEach((square) => {
+		if (square === squares[curSqr]) {
+			square.isCursorHere = true;
+		} else {
+			square.isCursorHere = false;
+		}
+		createSquare(square);
+	});
+});
+
+// Создаем прослушиватель изменений для canvas.
+const resizeCanvasObserver = new ResizeObserver((entries) => {
+	const { width } = entries[0].contentRect;
+	canvas.width = canvas.height = width;
+	setSideOfField();
+	squares.forEach((square) => createSquare(square));
+});
+
+// Запускаем прослушиватель изменений для canvas.
+resizeCanvasObserver.observe(canvas);
